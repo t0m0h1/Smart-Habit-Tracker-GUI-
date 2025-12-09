@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from date_time import DateTimeDisplay
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -150,6 +151,10 @@ class HabitTrackerApp(ctk.CTk):
         self.main = ctk.CTkFrame(self, corner_radius=0)
         self.main.pack(side="left", expand=True, fill="both")
 
+        # Add date/time display at top
+        self.datetime_display = DateTimeDisplay(self.main)
+
+        # Header
         header = ctk.CTkLabel(self.main, text="Daily Dashboard", font=("Arial", 28, "bold"))
         header.pack(pady=20)
 
@@ -162,6 +167,7 @@ class HabitTrackerApp(ctk.CTk):
         self.add_habit_card("Drink Water", 0.3)
         self.add_habit_card("Exercise", 0.7)
         self.add_habit_card("Read", 0.5)
+
 
     # ---------------------------
     # Habit management
