@@ -3,10 +3,7 @@ import customtkinter as ctk
 ctk.set_appearance_mode("dark")      # "light" or "dark"
 ctk.set_default_color_theme("blue")  # can be "green", "dark-blue", etc.
 
-
-# -------------------------------------------------------------------
 # CUSTOM CIRCULAR PROGRESS BAR
-# -------------------------------------------------------------------
 class CircularProgress(ctk.CTkFrame):
     def __init__(self, master, size=120, thickness=10, progress=0.0, progress_color="#1f6aa5", **kwargs):
         super().__init__(master, fg_color="#1b1b1b", **kwargs)
@@ -97,12 +94,48 @@ class HabitTrackerApp(ctk.CTk):
 
         ctk.CTkButton(self.sidebar, text="Dashboard").pack(pady=10, fill="x")
         ctk.CTkButton(self.sidebar, text="Add Habit").pack(pady=10, fill="x")
-        ctk.CTkButton(self.sidebar, text="Settings").pack(pady=10, fill="x")
+        ctk.CTkButton(self.sidebar, text="Settings", command=self.open_settings).pack(pady=10, fill="x")
+
 
         ctk.CTkLabel(self.sidebar, text="Appearance Mode:").pack(pady=20)
         self.mode_switch = ctk.CTkOptionMenu(self.sidebar, values=["Light", "Dark"], command=self.change_mode)
         self.mode_switch.pack(pady=5)
         self.mode_switch.set(ctk.get_appearance_mode().capitalize())
+
+
+# Settings functionality
+        
+    def open_settings(self):
+        # Clear current main content
+        for widget in self.main.winfo_children():
+            widget.destroy()
+
+        # Header
+        header = ctk.CTkLabel(self.main, text="Settings", font=("Arial", 28, "bold"))
+        header.pack(pady=20)
+
+        # Example Setting: Default Progress Increment
+        ctk.CTkLabel(self.main, text="Default Progress Increment (%)", font=("Arial", 16)).pack(pady=10)
+        self.progress_increment = ctk.CTkSlider(self.main, from_=1, to=50, number_of_steps=49)
+        self.progress_increment.set(10)  # default 10%
+        self.progress_increment.pack(pady=10)
+
+        # Example Setting: Reset All Habits Button
+        ctk.CTkButton(self.main, text="Reset All Habits", command=self.reset_all_habits).pack(pady=20)
+
+
+    def reset_all_habits(self):
+        for card in self.cards_frame.winfo_children():
+            for widget in card.winfo_children():
+                if isinstance(widget, CircularProgress):
+                    widget.set_progress(0)
+                elif isinstance(widget, ctk.CTkLabel):
+                    # Update text too
+                    lines = widget.cget("text").split("\n")
+                    if "Progress" in lines[-1]:
+                        widget.configure(text=f"{lines[0]}\nProgress: 0%")
+
+
 
     def create_main_content(self):
         self.main = ctk.CTkFrame(self, corner_radius=0)
