@@ -1,55 +1,56 @@
 import customtkinter as ctk
-import math
 
 ctk.set_appearance_mode("dark")      # "light" or "dark"
 ctk.set_default_color_theme("blue")  # can be "green", "dark-blue", etc.
 
 
 # -------------------------------------------------------------------
-# CUSTOM CIRCULAR PROGRESS BAR (drawn with CTkCanvas)
+# CUSTOM CIRCULAR PROGRESS BAR
 # -------------------------------------------------------------------
 class CircularProgress(ctk.CTkFrame):
-    def __init__(self, master, size=120, thickness=10, progress=0.0, text="0%", **kwargs):
-        super().__init__(master, fg_color="transparent", **kwargs)
+    def __init__(self, master, size=120, thickness=10, progress=0.0, progress_color="#1f6aa5", **kwargs):
+        super().__init__(master, fg_color="#1b1b1b", **kwargs)
 
         self.size = size
         self.thickness = thickness
-        self.progress = progress
+        self.progress = max(0, min(1, progress))
+        self.progress_color = progress_color
 
-        self.canvas = ctk.CTkCanvas(self, width=size, height=size, bg=self._fg_color, highlightthickness=0)
+        # Use parent's fg_color if needed
+        self.canvas = ctk.CTkCanvas(self, width=size, height=size, bg=self.cget("fg_color"), highlightthickness=0)
         self.canvas.pack()
 
         self.text_id = None
         self.draw()
 
     def set_progress(self, value: float):
+        """Update progress value (0.0 to 1.0)"""
         self.progress = max(0, min(1, value))
-        self.draw()
+        self.update_draw()
 
     def draw(self):
-        self.canvas.delete("all")
-
+        """Initial draw of canvas items"""
         radius = self.size / 2
-        start = -90
-        extent = self.progress * 360
+        start_angle = -90
+        extent_angle = self.progress * 360
 
         # Background ring
-        self.canvas.create_oval(
+        self.bg_ring = self.canvas.create_oval(
             self.thickness, self.thickness,
             self.size - self.thickness, self.size - self.thickness,
             width=self.thickness,
             outline="#444444"
         )
 
-        # Progress ring
-        self.canvas.create_arc(
+        # Progress arc
+        self.progress_arc = self.canvas.create_arc(
             self.thickness, self.thickness,
             self.size - self.thickness, self.size - self.thickness,
-            start=start,
-            extent=extent,
+            start=start_angle,
+            extent=extent_angle,
             style="arc",
             width=self.thickness,
-            outline="#1f6aa5"
+            outline=self.progress_color
         )
 
         # Center text
@@ -60,6 +61,11 @@ class CircularProgress(ctk.CTkFrame):
             fill="white",
             font=("Arial", 16, "bold")
         )
+
+    def update_draw(self):
+        """Update the progress arc and text without redrawing everything"""
+        self.canvas.itemconfig(self.progress_arc, extent=self.progress * 360)
+        self.canvas.itemconfig(self.text_id, text=f"{int(self.progress * 100)}%")
 
 
 # -------------------------------------------------------------------
@@ -79,8 +85,10 @@ class HabitTrackerApp(ctk.CTk):
     # LAYOUT
     # -------------------------------------------------------------------
     def create_layout(self):
+        self.create_sidebar()
+        self.create_main_content()
 
-        # Sidebar
+    def create_sidebar(self):
         self.sidebar = ctk.CTkFrame(self, width=180, corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
 
@@ -91,12 +99,12 @@ class HabitTrackerApp(ctk.CTk):
         ctk.CTkButton(self.sidebar, text="Add Habit").pack(pady=10, fill="x")
         ctk.CTkButton(self.sidebar, text="Settings").pack(pady=10, fill="x")
 
-        # Appearance mode switch
         ctk.CTkLabel(self.sidebar, text="Appearance Mode:").pack(pady=20)
-        mode_switch = ctk.CTkOptionMenu(self.sidebar, values=["Light", "Dark"], command=self.change_mode)
-        mode_switch.pack(pady=5)
+        self.mode_switch = ctk.CTkOptionMenu(self.sidebar, values=["Light", "Dark"], command=self.change_mode)
+        self.mode_switch.pack(pady=5)
+        self.mode_switch.set(ctk.get_appearance_mode().capitalize())
 
-        # Main Content Panel
+    def create_main_content(self):
         self.main = ctk.CTkFrame(self, corner_radius=0)
         self.main.pack(side="left", expand=True, fill="both")
 
@@ -113,10 +121,9 @@ class HabitTrackerApp(ctk.CTk):
         self.add_habit_card("Read", 0.5)
 
     # -------------------------------------------------------------------
-    # Habit Card (UI component)
+    # HABIT CARD
     # -------------------------------------------------------------------
     def add_habit_card(self, habit_name, progress):
-
         card = ctk.CTkFrame(self.cards_frame)
         card.pack(pady=10, padx=10, fill="x")
 
@@ -124,14 +131,12 @@ class HabitTrackerApp(ctk.CTk):
         cp = CircularProgress(card, size=90, thickness=8, progress=progress)
         cp.pack(side="left", padx=15, pady=15)
 
-        # Right: Text info
-        label = ctk.CTkLabel(card, text=f"{habit_name}\nProgress: {int(progress*100)}%", 
-                             font=("Arial", 18))
+        # Right: Habit name & progress
+        label = ctk.CTkLabel(card, text=f"{habit_name}\nProgress: {int(progress*100)}%", font=("Arial", 18))
         label.pack(side="left", padx=10)
 
-        # Button to simulate an update
-        btn = ctk.CTkButton(card, text="+10%", width=80, 
-                            command=lambda cp=cp: self.increase_progress(cp))
+        # Button to simulate progress update
+        btn = ctk.CTkButton(card, text="+10%", width=80, command=lambda cp=cp: self.increase_progress(cp))
         btn.pack(side="right", padx=20)
 
     def increase_progress(self, cp_widget):
@@ -139,13 +144,13 @@ class HabitTrackerApp(ctk.CTk):
         cp_widget.set_progress(new_val)
 
     # -------------------------------------------------------------------
-    # Appearance mode handling
+    # APPEARANCE MODE
     # -------------------------------------------------------------------
     def change_mode(self, mode):
         ctk.set_appearance_mode(mode.lower())
 
 
-# Run app
+# Run application
 if __name__ == "__main__":
     app = HabitTrackerApp()
     app.mainloop()
