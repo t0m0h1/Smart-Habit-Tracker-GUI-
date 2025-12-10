@@ -1,45 +1,45 @@
-"""
-Smart Habit Tracker - Refactored with Phase 1 features (quick DateTimeDisplay fix):
-- Add / Delete habits
-- Edit habit name
-- Default starting progress 0%
-- Global increment configurable in Settings
-- Persistence to JSON (habits.json) - loads on startup, saves on change
-- Stable page system (sidebar + pages)
-- Uses user's DateTimeDisplay which packs its own label internally (do NOT call .pack() on it)
-"""
-
 import json
 import os
 import datetime
 import customtkinter as ctk
 from tkinter import simpledialog, messagebox
 
-# Try to import user's DateTimeDisplay. If missing, provide a simple fallback.
-try:
-    from date_time import DateTimeDisplay
-except Exception:
-    # Minimal fallback - shows current date/time and updates every second
-    class DateTimeDisplay(ctk.CTkLabel):
-        def __init__(self, master, **kwargs):
-            super().__init__(master, **kwargs)
-            self.configure(font=("Arial", 12))
-            self.update_clock()
-
-        def update_clock(self):
-            now = datetime.datetime.now().strftime("%A %d %B %Y, %I:%M:%S %p")
-            self.configure(text=now)
-            try:
-                self.after(1000, self.update_clock)
-            except Exception:
-                pass
-
-
 # ---------- Appearance defaults ----------
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 HABITS_FILE = "habits.json"
+
+# Default categories
+DEFAULT_CATEGORIES = [
+    "Health",
+    "Fitness",
+    "Productivity",
+    "Learning",
+    "Work",
+    "Personal",
+    "Finance",
+    "Chores",
+    "Social",
+    "Other",
+]
+
+
+# Minimal DateTimeDisplay (keeps behavior simple and always packs)
+class DateTimeDisplay(ctk.CTkLabel):
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self.configure(font=("Arial", 12))
+        self.pack(pady=6)
+        self.update_clock()
+
+    def update_clock(self):
+        now = datetime.datetime.now().strftime("%A %d %B %Y, %I:%M:%S %p")
+        self.configure(text=now)
+        try:
+            self.after(1000, self.update_clock)
+        except Exception:
+            pass
 
 
 # ---------- Circular progress widget ----------
@@ -105,21 +105,61 @@ class CircularProgress(ctk.CTkFrame):
         return {"progress": self.progress}
 
 
+# ---------- Collapsible Group Frame (for categories) ----------
+class CollapsibleGroup(ctk.CTkFrame):
+    def __init__(self, master, title, *args, **kwargs):
+        super().__init__(master, **kwargs)
+        self.title = title
+        self.visible = True
+
+        self.header = ctk.CTkFrame(self, fg_color="transparent")
+        self.header.pack(fill="x", padx=4, pady=(6, 0))
+
+        self.toggle_btn = ctk.CTkButton(self.header, text=f"▼ {self.title}", anchor="w", command=self.toggle,
+                                        height=28, fg_color="#2a2a2a", corner_radius=6)
+        self.toggle_btn.pack(fill="x")
+
+        self.content = ctk.CTkFrame(self, fg_color="transparent")
+        self.content.pack(fill="both", expand=True, padx=8, pady=6)
+
+    def toggle(self):
+        if self.visible:
+            # hide
+            for w in self.content.winfo_children():
+                w.pack_forget()
+            self.content.forget = True
+            self.toggle_btn.configure(text=f"▶ {self.title}")
+            self.visible = False
+        else:
+            # show
+            for w in self.content.winfo_children():
+                w.pack(pady=8, padx=12, fill="x")
+            self.toggle_btn.configure(text=f"▼ {self.title}")
+            self.visible = True
+
+    def add_widget(self, widget):
+        widget.pack(pady=8, padx=12, fill="x")
+
+
 # ---------- HabitCard ----------
 class HabitCard(ctk.CTkFrame):
-    def __init__(self, master, name, progress=0.0, increment=0.1, save_callback=None, **kwargs):
+    def __init__(self, master, app, name, category="Other", progress=0.0, increment=0.1, save_callback=None,
+                 **kwargs):
         super().__init__(master, fg_color="#222222", corner_radius=8, **kwargs)
 
+        self.app = app  # reference to main app for operations like remove
         self.habit_name = name
+        self.category = category
         self.increment = increment
-        self.save_callback = save_callback  # function to call whenever this card changes
+        self.save_callback = save_callback
 
         # Layout: left = progress widget, center = label, right = controls
         self.progress_widget = CircularProgress(self, size=78, thickness=8, progress=progress)
         self.progress_widget.pack(side="left", padx=12, pady=12)
 
-        # Middle label (name + progress)
-        self.label = ctk.CTkLabel(self, text=self._label_text(), font=("Arial", 14), anchor="w", justify="left")
+        # Middle label (name + category + progress)
+        text = self._label_text()
+        self.label = ctk.CTkLabel(self, text=text, font=("Arial", 14), anchor="w", justify="left")
         self.label.pack(side="left", expand=True, fill="x", padx=6)
 
         # Controls frame on the right
@@ -145,7 +185,7 @@ class HabitCard(ctk.CTkFrame):
         self.reset_btn.grid(row=0, column=3, padx=(0, 0), pady=2)
 
     def _label_text(self):
-        return f"{self.habit_name}\nProgress: {int(self.progress_widget.progress * 100)}%"
+        return f"{self.habit_name}\nCategory: {self.category}\nProgress: {int(self.progress_widget.progress * 100)}%"
 
     def increase_progress(self):
         new_val = min(1.0, self.progress_widget.progress + self.increment)
@@ -159,31 +199,72 @@ class HabitCard(ctk.CTkFrame):
         self._trigger_save()
 
     def edit_name(self):
-        new_name = simpledialog.askstring("Edit Habit", "Enter new habit name:", initialvalue=self.habit_name)
-        if new_name:
-            self.habit_name = new_name.strip()
+        # Build a simple dialog box that allows editing name and category
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Edit Habit")
+        dialog.geometry("350x160")
+
+        ctk.CTkLabel(dialog, text="Habit name:").pack(pady=(12, 2))
+        name_var = ctk.StringVar(value=self.habit_name)
+        name_entry = ctk.CTkEntry(dialog, textvariable=name_var)
+        name_entry.pack(padx=12, fill="x")
+
+        ctk.CTkLabel(dialog, text="Category:").pack(pady=(8, 2))
+        category_var = ctk.StringVar(value=self.category)
+        dropdown_values = list(self.app.categories)
+        if "Custom..." not in dropdown_values:
+            dropdown_values.append("Custom...")
+        cat_dropdown = ctk.CTkOptionMenu(dialog, variable=category_var, values=dropdown_values)
+        cat_dropdown.pack(padx=12, fill="x")
+
+        def on_save():
+            new_name = name_var.get().strip()
+            new_cat = category_var.get()
+            if new_cat == "Custom...":
+                custom = simpledialog.askstring("Custom category", "Enter new category name:", parent=self)
+                if custom:
+                    new_cat = custom.strip()
+                    if new_cat and new_cat not in self.app.categories:
+                        self.app.categories.append(new_cat)
+            if new_name:
+                self.habit_name = new_name
+            self.category = new_cat
             self.label.configure(text=self._label_text())
             self._trigger_save()
+            dialog.destroy()
+
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=12)
+        ctk.CTkButton(btn_frame, text="Save", command=on_save).pack(side="left", padx=8)
+        ctk.CTkButton(btn_frame, text="Cancel", command=dialog.destroy).pack(side="left", padx=8)
 
     def delete_self(self):
         confirm = messagebox.askyesno("Delete habit", f"Are you sure you want to delete '{self.habit_name}'?")
         if confirm:
-            # parent should remove from list and widget tree
-            parent = self.master
-            # destroy the widget and call save via callback
+            try:
+                # remove from app list
+                if self in self.app.habit_cards:
+                    self.app.habit_cards.remove(self)
+            except Exception:
+                pass
             self.destroy()
+            # trigger save from app
             if callable(self.save_callback):
                 self.save_callback()
 
     def set_increment(self, new_increment):
         self.increment = new_increment
-        self.inc_btn.configure(text=f"+{int(self.increment * 100)}%")
+        try:
+            self.inc_btn.configure(text=f"+{int(self.increment * 100)}%")
+        except Exception:
+            pass
 
     def to_dict(self):
         return {
             "name": self.habit_name,
             "progress": self.progress_widget.progress,
-            "increment": self.increment
+            "increment": self.increment,
+            "category": self.category,
         }
 
     def _trigger_save(self):
@@ -208,6 +289,12 @@ class HabitTrackerApp(ctk.CTk):
         # in-memory habit card references
         self.habit_cards = []
 
+        # categories (persisted)
+        self.categories = list(DEFAULT_CATEGORIES)
+
+        # mapping category -> CollapsibleGroup
+        self.category_groups = {}
+
         # pages container
         self.pages = {}
 
@@ -223,7 +310,7 @@ class HabitTrackerApp(ctk.CTk):
 
     # ---------------- Sidebar ----------------
     def create_sidebar(self):
-        self.sidebar = ctk.CTkFrame(self, width=180, corner_radius=0)
+        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
 
         title = ctk.CTkLabel(self.sidebar, text="Habits", font=("Arial", 22, "bold"))
@@ -232,7 +319,8 @@ class HabitTrackerApp(ctk.CTk):
         ctk.CTkButton(self.sidebar, text="Dashboard", command=lambda: self.show_page("dashboard")).pack(pady=8,
                                                                                                       fill="x")
         ctk.CTkButton(self.sidebar, text="Add Habit", command=self.add_habit_prompt).pack(pady=8, fill="x")
-        ctk.CTkButton(self.sidebar, text="Settings", command=lambda: self.show_page("settings")).pack(pady=8, fill="x")
+        ctk.CTkButton(self.sidebar, text="Settings", command=lambda: self.show_page("settings")).pack(pady=8,
+                                                                                                     fill="x")
 
         ctk.CTkLabel(self.sidebar, text="Appearance Mode:").pack(pady=(20, 6))
         self.mode_switch = ctk.CTkOptionMenu(self.sidebar, values=["Light", "Dark"], command=self.change_mode)
@@ -250,14 +338,12 @@ class HabitTrackerApp(ctk.CTk):
         self.pages["dashboard"] = dashboard
 
         # Date/time display
-        # NOTE: Do NOT call .pack() on DateTimeDisplay here because the user's DateTimeDisplay
-        # implementation packs its own internal label. We just instantiate it.
         self.datetime_display = DateTimeDisplay(dashboard)
 
         header = ctk.CTkLabel(dashboard, text="Daily Dashboard", font=("Arial", 28, "bold"))
         header.pack(pady=(6, 12))
 
-        # Scrollable frame for habit cards
+        # Scrollable frame for habit groups
         self.cards_frame = ctk.CTkScrollableFrame(dashboard, fg_color="transparent")
         self.cards_frame.pack(padx=20, pady=10, expand=True, fill="both")
 
@@ -291,13 +377,27 @@ class HabitTrackerApp(ctk.CTk):
             page.pack(side="left", expand=True, fill="both")
 
     # ---------------- Habit management ----------------
-    def add_habit_card(self, name, progress=0.0, increment=None, save=True):
+    def _ensure_category_group(self, category):
+        # create a group frame for a category if missing
+        if category in self.category_groups:
+            return self.category_groups[category]
+        grp = CollapsibleGroup(self.cards_frame, title=category)
+        grp.pack(fill="x", pady=4, padx=4)
+        self.category_groups[category] = grp
+        return grp
+
+    def add_habit_card(self, name, category="Other", progress=0.0, increment=None, save=True):
         if increment is None:
             increment = self.progress_increment
+        # Ensure the category exists in the app categories list
+        if category not in self.categories:
+            self.categories.append(category)
+
         # Create card - save_callback ensures the app persists when card state changes (like delete)
-        card = HabitCard(self.cards_frame, name=name, progress=progress, increment=increment,
+        grp = self._ensure_category_group(category)
+        card = HabitCard(grp.content, app=self, name=name, category=category, progress=progress, increment=increment,
                          save_callback=self.save_habits)
-        card.pack(pady=8, padx=12, fill="x")
+        grp.add_widget(card)
         self.habit_cards.append(card)
         # Ensure increment button text matches current increment
         card.set_increment(increment)
@@ -306,17 +406,44 @@ class HabitTrackerApp(ctk.CTk):
         return card
 
     def add_habit_prompt(self):
-        # Ask for name only; start progress defaults to 0%
-        name = simpledialog.askstring("New Habit", "Enter habit name:")
-        if not name:
-            return
-        name = name.strip()
-        if not name:
-            return
-        # Add with 0 progress by default
-        self.add_habit_card(name=name, progress=0.0, increment=self.progress_increment, save=True)
-        # Ensure dashboard is visible after adding
-        self.show_page("dashboard")
+        # Create a small dialog to get name and category
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("New Habit")
+        dialog.geometry("360x200")
+
+        ctk.CTkLabel(dialog, text="Habit name:").pack(pady=(12, 2))
+        name_var = ctk.StringVar(value="")
+        name_entry = ctk.CTkEntry(dialog, textvariable=name_var)
+        name_entry.pack(padx=12, fill="x")
+
+        ctk.CTkLabel(dialog, text="Category:").pack(pady=(12, 2))
+        category_var = ctk.StringVar(value=self.categories[0] if self.categories else "Other")
+        dropdown_values = list(self.categories)
+        if "Custom..." not in dropdown_values:
+            dropdown_values.append("Custom...")
+        cat_dropdown = ctk.CTkOptionMenu(dialog, variable=category_var, values=dropdown_values)
+        cat_dropdown.pack(padx=12, fill="x")
+
+        def on_create():
+            name = name_var.get().strip()
+            if not name:
+                messagebox.showwarning("Missing name", "Please enter a habit name.")
+                return
+            category = category_var.get()
+            if category == "Custom...":
+                custom = simpledialog.askstring("Custom category", "Enter new category name:", parent=self)
+                if custom:
+                    category = custom.strip()
+                    if category and category not in self.categories:
+                        self.categories.append(category)
+            self.add_habit_card(name=name, category=category, progress=0.0, increment=self.progress_increment, save=True)
+            dialog.destroy()
+            self.show_page("dashboard")
+
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(pady=12)
+        ctk.CTkButton(btn_frame, text="Create", command=on_create).pack(side="left", padx=8)
+        ctk.CTkButton(btn_frame, text="Cancel", command=dialog.destroy).pack(side="left", padx=8)
 
     def update_increment(self, value):
         # Slider returns float-like; convert to fraction
@@ -348,7 +475,8 @@ class HabitTrackerApp(ctk.CTk):
         data = {
             "meta": {
                 "saved_at": datetime.datetime.utcnow().isoformat(),
-                "progress_increment": self.progress_increment
+                "progress_increment": self.progress_increment,
+                "categories": self.categories,
             },
             "habits": []
         }
@@ -373,12 +501,13 @@ class HabitTrackerApp(ctk.CTk):
     def load_habits(self):
         if not os.path.exists(HABITS_FILE):
             sample = [
-                {"name": "Drink Water", "progress": 0.0, "increment": self.progress_increment},
-                {"name": "Exercise", "progress": 0.0, "increment": self.progress_increment},
-                {"name": "Read", "progress": 0.0, "increment": self.progress_increment},
+                {"name": "Drink Water", "progress": 0.0, "increment": self.progress_increment, "category": "Health"},
+                {"name": "Exercise", "progress": 0.0, "increment": self.progress_increment, "category": "Fitness"},
+                {"name": "Read", "progress": 0.0, "increment": self.progress_increment, "category": "Learning"},
             ]
             for s in sample:
-                self.add_habit_card(s["name"], progress=s["progress"], increment=s["increment"], save=False)
+                self.add_habit_card(s["name"], category=s.get("category", "Other"), progress=s["progress"],
+                                   increment=s["increment"], save=False)
             self.save_habits()
             return
 
@@ -392,18 +521,34 @@ class HabitTrackerApp(ctk.CTk):
                     os.remove(HABITS_FILE)
                 except Exception:
                     pass
-                self.load_habits()
+                # restart loading (will create sample)
+                return self.load_habits()
             return
 
         meta = data.get("meta", {})
         inc = meta.get("progress_increment")
+        cats = meta.get("categories")
         if isinstance(inc, (int, float)):
             self.progress_increment = float(inc)
+
+        if isinstance(cats, list) and cats:
+            # merge saved categories, ensuring defaults are present
+            for c in cats:
+                if c not in self.categories:
+                    self.categories.append(c)
 
         try:
             self.increment_slider.set(int(self.progress_increment * 100))
         except Exception:
             pass
+
+        # Clear any existing UI
+        for grp in list(self.category_groups.values()):
+            try:
+                grp.destroy()
+            except Exception:
+                pass
+        self.category_groups.clear()
 
         for card in list(self.habit_cards):
             try:
@@ -416,11 +561,12 @@ class HabitTrackerApp(ctk.CTk):
             name = entry.get("name", "Untitled")
             progress = float(entry.get("progress", 0.0))
             increment = float(entry.get("increment", self.progress_increment))
+            category = entry.get("category", "Other")
             if progress < 0:
                 progress = 0.0
             if progress > 1:
                 progress = 1.0
-            self.add_habit_card(name=name, progress=progress, increment=increment, save=False)
+            self.add_habit_card(name=name, category=category, progress=progress, increment=increment, save=False)
 
     # ---------------- Utility ----------------
     def change_mode(self, mode):

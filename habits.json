@@ -1,23 +1,26 @@
 {
   "meta": {
-    "saved_at": "2025-12-10T16:14:05.057961",
-    "progress_increment": 0.14
+    "saved_at": "2025-12-10T22:20:27.176353",
+    "progress_increment": 0.21,
+    "categories": [
+      "Health",
+      "Fitness",
+      "Productivity",
+      "Learning",
+      "Work",
+      "Personal",
+      "Finance",
+      "Chores",
+      "Social",
+      "Other"
+    ]
   },
   "habits": [
     {
-      "name": "Exercise",
+      "name": "Exercise Bike",
       "progress": 0.0,
-      "increment": 0.14
-    },
-    {
-      "name": "Read",
-      "progress": 0.0,
-      "increment": 0.14
-    },
-    {
-      "name": "Water",
-      "progress": 0.0,
-      "increment": 0.14
+      "increment": 0.21,
+      "category": "Health"
     }
   ]
 }
