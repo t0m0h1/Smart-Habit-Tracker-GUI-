@@ -310,26 +310,34 @@ class HabitTrackerApp(ctk.CTk):
 
     # ---------------- Sidebar ----------------
     def create_sidebar(self):
-        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0)
-        self.sidebar.pack(side="left", fill="y")
+        # Sidebar container (dark background)
+        self.sidebar = ctk.CTkFrame(self, width=200, corner_radius=0, fg_color="#1b1b1b")
+        self.sidebar.pack(side="left", fill="y")  # no padx here
 
-        title = ctk.CTkLabel(self.sidebar, text="Habits", font=("Arial", 22, "bold"))
+        # Inner frame for padding
+        self.sidebar_inner = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        self.sidebar_inner.pack(fill="both", expand=True, padx=12, pady=12)  # adds spacing
+
+        # Title
+        title = ctk.CTkLabel(self.sidebar_inner, text="Habits", font=("Arial", 22, "bold"))
         title.pack(pady=20)
 
-        ctk.CTkButton(self.sidebar, text="Dashboard", command=lambda: self.show_page("dashboard")).pack(pady=8,
-                                                                                                      fill="x")
-        ctk.CTkButton(self.sidebar, text="Add Habit", command=self.add_habit_prompt).pack(pady=8, fill="x")
-        ctk.CTkButton(self.sidebar, text="Settings", command=lambda: self.show_page("settings")).pack(pady=8,
-                                                                                                     fill="x")
+        # Sidebar buttons
+        ctk.CTkButton(self.sidebar_inner, text="Dashboard", command=lambda: self.show_page("dashboard")).pack(pady=8, fill="x")
+        ctk.CTkButton(self.sidebar_inner, text="Add Habit", command=self.add_habit_prompt).pack(pady=8, fill="x")
+        ctk.CTkButton(self.sidebar_inner, text="Settings", command=lambda: self.show_page("settings")).pack(pady=8, fill="x")
 
-        ctk.CTkLabel(self.sidebar, text="Appearance Mode:").pack(pady=(20, 6))
-        self.mode_switch = ctk.CTkOptionMenu(self.sidebar, values=["Light", "Dark"], command=self.change_mode)
+        # Appearance mode
+        ctk.CTkLabel(self.sidebar_inner, text="Appearance Mode:").pack(pady=(20, 6))
+        self.mode_switch = ctk.CTkOptionMenu(self.sidebar_inner, values=["Light", "Dark"], command=self.change_mode)
         self.mode_switch.pack(pady=5)
         self.mode_switch.set(ctk.get_appearance_mode().capitalize())
 
-        # Quick "save now" and path label for debugging
-        ctk.CTkButton(self.sidebar, text="Save now", command=self.save_habits).pack(pady=(20, 6), fill="x")
-        ctk.CTkLabel(self.sidebar, text=f"Data file: {HABITS_FILE}", font=("Arial", 9)).pack(pady=(6, 12))
+        # Quick "save now" and path label
+        ctk.CTkButton(self.sidebar_inner, text="Save now", command=self.save_habits).pack(pady=(20, 6), fill="x")
+        ctk.CTkLabel(self.sidebar_inner, text=f"Data file: {HABITS_FILE}", font=("Arial", 9)).pack(pady=(6, 12))
+
+
 
     # ---------------- Pages ----------------
     def create_pages(self):
