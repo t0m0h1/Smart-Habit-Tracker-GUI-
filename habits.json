@@ -1,0 +1,23 @@
+{
+  "meta": {
+    "saved_at": "2025-12-10T16:14:05.057961",
+    "progress_increment": 0.14
+  },
+  "habits": [
+    {
+      "name": "Exercise",
+      "progress": 0.0,
+      "increment": 0.14
+    },
+    {
+      "name": "Read",
+      "progress": 0.0,
+      "increment": 0.14
+    },
+    {
+      "name": "Water",
+      "progress": 0.0,
+      "increment": 0.14
+    }
+  ]
+}

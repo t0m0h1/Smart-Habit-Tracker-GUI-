@@ -15,6 +15,6 @@ class DateTimeDisplay:
 
     def update_datetime(self):
         now = datetime.now()
-        formatted_time = now.strftime("%A %d %B %Y, %-I:%M %p")  # Tuesday 11 September 2023, 9:44 PM
+        formatted_time = now.strftime("%A %d %B %Y, %-I:%M %p")  # Tuesday 11 September 2023, 9:44 PM E.G.
         self.label.configure(text=formatted_time)
         self.label.after(1000, self.update_datetime)
